@@ -56,6 +56,9 @@ public class Auction {
 	}
 	
 	public void bid (double bidAmount, String name)
+	// split bid into 2 modifer functions: 
+	// check if address is a user 
+	// check if address has sufficient funds
 	{
 		User u = null;
 		for (int k = 0; k < users.size(); k++)
