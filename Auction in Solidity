@@ -1,0 +1,92 @@
+// SPDX-License-Identifier: GPL-3.0
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+
+pragma solidity >=0.8.9;
+
+contract Auction 
+{
+    address [] public bidders;
+    string description;
+	uint256 startTime;
+	uint256 endTime; 
+	uint256 price;
+	address highestBidder;
+	address public owner;
+	address previousBidder; 
+	
+	constructor (string memory des, uint256 itemPrice)
+	{
+	    owner = msg.sender;
+	    startTime = block.timestamp;
+	    endTime = startTime + 3600;
+	    description = des;
+	    price = itemPrice;
+	}
+	
+	modifier hasFunds (address bidder)
+	{
+	    require (bidder.balance > price, "Insufficent Funds.");
+	    _;
+	}
+	
+	modifier validBid (uint256 bidAmount)
+	{
+	    require (bidAmount > price, "You must bid more than the current price");
+	    _;
+	}
+	
+	modifier validTime ()
+	{
+	    require (endTime > block.timestamp, win());
+	    _;
+	}
+	
+	modifier onlyOwner()
+	{
+	    require (msg.sender == owner, "You are not the owner");
+	    _;
+	}
+	
+	function takeMoney (address bidder, uint256 amount) public payable
+	{
+	    bidder.balance -= amount;
+	}
+	
+	function giveMoney (address user) public payable
+	{
+	    user.balance += price;
+	}
+	
+	function bid (uint256 amount) public hasFunds (msg.sender) validBid (amount) validTime()
+	{
+	    // problems:
+	    // a) does the behavior of my helper methods work?
+	    // b) I want to call win() method without having someone bid after time ends
+	    takeMoney (msg.sender, amount);
+	    highestBidder = msg.sender;
+	    if (previousBidder != address(0))
+	    {
+	        giveMoney(previousBidder);
+	    }
+	    price = amount;
+	    previousBidder = highestBidder; 
+	    endTime += 30;
+	}
+	
+	function win () public returns (string memory)
+	{
+	    giveMoney(owner);
+	    return "This auction is now over. Thanks to all who participated";
+	}
+	
+	function getTimeRemaining() public view returns (uint256)
+	{
+		return (endTime-block.timestamp);
+	}
+	
+    function setEndTime(uint256 newTime) public onlyOwner()
+	{
+		require (newTime > block.timestamp, "Invalid Time");
+		endTime = newTime;
+	}
+}
