@@ -1,0 +1,101 @@
+// SPDX-License-Identifier: GPL-3.0
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+
+pragma solidity >=0.8.9;
+
+contract Auction 
+{
+    address [] public bidders;
+    string description;
+	uint256 startTime;
+	uint256 endTime; 
+	uint256 price;
+	address highestBidder;
+	address payable public owner;
+	address previousBidder; 
+	uint256 nftID;
+	address nftAddress; 
+	IERC721 nft;
+	
+	constructor (uint256 id, address _nftAddress)
+	{
+	    owner = payable(msg.sender);
+	    nftID = id;
+	    nftAddress = _nftAddress;
+	    nft = IERC721(nftAddress);
+	}
+	
+	function startAuction (string memory des, uint256 itemPrice) public onlyOwner()
+	{
+	    startTime = block.timestamp;
+	    endTime = startTime + 3600; //1 hour
+	    description = des;
+	    price = itemPrice;
+	}
+	
+	modifier hasFunds (address bidder)
+	{
+	    require (bidder.balance > price, "Insufficent Funds.");
+	    _;
+	}
+	
+	modifier validBid (uint256 bidAmount)
+	{
+	    require (bidAmount > price, "You must bid more than the current price");
+	    _;
+	}
+	
+	function isAuctionStillGoing () private view returns (bool)
+	{
+	    if (endTime > block.timestamp)
+	    {
+	        return true;
+	    }
+	    return false;
+	}
+	
+	modifier onlyOwner()
+	{
+	    require (msg.sender == owner, "You are not the owner");
+	    _;
+	}
+	
+	modifier noRepeat()
+	{
+	    require (msg.sender != previousBidder, "You are already the highest bid");
+	    _;
+	}
+	
+	function bid (uint256 amount) public hasFunds (msg.sender) validBid (amount) noRepeat()
+	{
+	    if (!isAuctionStillGoing())
+	    {
+	        endAuction();
+	    }
+	    highestBidder = msg.sender;
+	    price = amount;
+	    previousBidder = highestBidder; 
+	    endTime += 30;
+	}
+	
+	event EndAuction (address winner, uint256 finalPrice);
+	
+	function endAuction () public payable
+	{
+	    nft.transferFrom(msg.sender, highestBidder, nftID);
+	    owner.transfer(price);
+	    emit EndAuction (highestBidder, msg.value);
+	}
+	
+	function getTimeRemaining() public view returns (uint256)
+	{
+		require (endTime<block.timestamp, "This auction is over");
+		return (endTime-block.timestamp);
+	}
+	
+    function setEndTime(uint256 newTime) public onlyOwner()
+	{
+		require ((newTime+block.timestamp) > block.timestamp, "Invalid Time");
+		endTime = newTime+block.timestamp;
+	}
+}
