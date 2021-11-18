@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: GPL-3.0
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+
+pragma solidity >=0.8.9;
+
+contract Auction 
+{
+    string description;
+	uint256 startTime;
+	uint256 endTime; 
+	uint256 price;
+	User highestBidder;
+	User public owner;
+	User previousBidder; 
+	uint256 nftID;
+	address nftAddress; 
+	IERC721 nft;
+	
+	struct User 
+	{
+	    address userAddress;
+	    bool isUserSignedIn;
+	}
+	
+	mapping (address => User) public users;
+	
+	constructor ()
+	{
+	    owner.userAddress = payable(msg.sender);
+	    owner.isUserSignedIn = true;
+	    users[msg.sender] = owner;
+	}
+	
+	function startAuction (string memory des, uint256 itemPrice) public onlyOwner()
+	{
+	    startTime = block.timestamp;
+	    endTime = startTime + 3600; //1 hour
+	    description = des;
+	    price = itemPrice;
+	}
+	
+	function setNFT (uint256 id, address _nftAddress) public onlyOwner()
+	{
+	    nftID = id;
+	    nftAddress = _nftAddress;
+	    nft = IERC721(nftAddress);
+	}
+	
+	function signIn () public 
+	{
+	    require (users[msg.sender].isUserSignedIn == false, "You are already signed in");
+	    User memory u;
+	    u.userAddress = msg.sender;
+	    u.isUserSignedIn = true;
+	    users[msg.sender] = u;
+	}
+	
+	function signOut () public 
+	{
+	    require (users[msg.sender].isUserSignedIn == true, "You can't sign out if you're not signed in");
+	    users[msg.sender].isUserSignedIn = false;
+	}
+	
+	modifier hasFunds (address bidder)
+	{
+	    require (bidder.balance > price, "Insufficent Funds.");
+	    _;
+	}
+	
+	modifier validBid (uint256 bidAmount)
+	{
+	    require (bidAmount > price, "You must bid more than the current price");
+	    _;
+	}
+	
+	function isAuctionStillGoing () private view returns (bool)
+	{
+	    if (endTime > block.timestamp)
+	    {
+	        return true;
+	    }
+	    return false;
+	}
+	
+	modifier onlyOwner()
+	{
+	    require (msg.sender == owner.userAddress, "You are not the owner");
+	    _;
+	}
+	
+	modifier noRepeat()
+	{
+	    require (msg.sender != previousBidder.userAddress, "You are already the highest bid");
+	    _;
+	}
+	
+	modifier isSignedIn()
+	{
+	    require (users[msg.sender].isUserSignedIn == true, "You need to be signed in to bid");
+	    _;
+	}
+	
+	function bid (uint256 amount) public hasFunds (msg.sender) validBid (amount) noRepeat() isSignedIn()
+	{
+	    if (!isAuctionStillGoing())
+	    {
+	        endAuction();
+	    }
+	    highestBidder.userAddress = payable(msg.sender);
+	    previousBidder.userAddress = payable(highestBidder.userAddress);
+	    //highestBidder.transfer(amount);
+	    //address(this).transferFrom(address(this), previousBidder, price);
+	    price = amount;
+	    endTime += 30;
+	}
+	
+	event EndAuction (address winner, uint256 finalPrice);
+	
+	function endAuction () public payable onlyOwner()
+	{
+	    nft.safeTransferFrom(address(this), highestBidder.userAddress, nftID);
+	    emit EndAuction (highestBidder.userAddress, price);
+	}
+	
+	function getTimeRemaining() public view returns (uint256)
+	{
+		require (endTime>block.timestamp, "This auction is over");
+		return (endTime-block.timestamp);
+	}
+	
+    function setEndTime(uint256 newTime) public onlyOwner()
+	{
+		require ((newTime+block.timestamp) > block.timestamp, "Invalid Time");
+		endTime = newTime+block.timestamp;
+	}
+}
